@@ -1,0 +1,15 @@
+[project]
+name = "bug-investigation-env"
+version = "0.2.0"
+description = "Task-pack based RL environment for multi-step bug investigation."
+requires-python = ">=3.7"
+dependencies = []
+
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+norecursedirs = ["tasks"]
+addopts = "--ignore=tasks"
