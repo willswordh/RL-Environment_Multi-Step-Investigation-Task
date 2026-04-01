@@ -29,7 +29,13 @@ from env.tools.actions import (
 from env.episode_state import EpisodeState
 from env.task_config import load_task
 from env.tools.repository import Repository
-from env.reward import compute_reward, compute_step_reward
+from env.reward import (
+    award_shaping_reward,
+    compute_reward,
+    compute_step_reward,
+    compute_terminal_reward_delta,
+    is_solved_episode,
+)
 
 # Type aliases
 Observation = Dict[str, Any]
@@ -137,30 +143,35 @@ class BugInvestigationEnv:
             self.state.timed_out = True
             self.state.stop_reason = "timeout"
             breakdown = compute_reward(self.state)
+            step_reward = compute_terminal_reward_delta(
+                breakdown,
+                reward_emitted_so_far=self.state.reward_emitted_so_far,
+            )
             obs = self._make_observation(
                 action_taken=str(action),
                 result="[Episode Ended] Wall-clock timeout reached before action execution.",
             )
             self.state.record_transition(
                 action_taken=obs["action_taken"],
-                reward=breakdown.total,
+                reward=step_reward,
                 done=True,
                 result_preview=self._preview_result(obs["result"]),
             )
-            return obs, breakdown.total, True, self._info(breakdown=breakdown)
+            return obs, step_reward, True, self._info(breakdown=breakdown)
 
         # ── parse the action ────────────────────────────────────────────
         parsed_action, error = parse_action(action)
         if error:
-            obs = self._make_observation(
-                action_taken=str(action),
-                result=f"[Action Error] {error}",
-            )
-            # Invalid actions still cost a step
+            # Invalid actions consume budget immediately, so the observation
+            # should reflect the updated step count.
             self.state.step_count += 1
             self.state.invalid_action_count += 1
             self.state.parse_error_count += 1
             self.state.refresh_elapsed()
+            obs = self._make_observation(
+                action_taken=str(action),
+                result=f"[Action Error] {error}",
+            )
             step_reward = compute_step_reward(self.state, invalid_action=True)
             done = self.state.budget_exhausted
 
@@ -173,7 +184,10 @@ class BugInvestigationEnv:
 
             if done:
                 final_breakdown = compute_reward(self.state)
-                step_reward = final_breakdown.total
+                step_reward = compute_terminal_reward_delta(
+                    final_breakdown,
+                    reward_emitted_so_far=self.state.reward_emitted_so_far,
+                )
                 self.state.record_transition(
                     action_taken=obs["action_taken"],
                     reward=step_reward,
@@ -192,6 +206,7 @@ class BugInvestigationEnv:
         # ── execute the action ──────────────────────────────────────────
         repeated_action = self.state.record_action_signature(str(parsed_action))
         result_text = self._execute(parsed_action)
+        shaping_reward = award_shaping_reward(self.state)
 
         # ── increment step counter ──────────────────────────────────────
         self.state.step_count += 1
@@ -218,13 +233,17 @@ class BugInvestigationEnv:
         ):
             # Terminal step — compute full episode reward
             breakdown = compute_reward(self.state)
-            step_reward = breakdown.total
+            step_reward = compute_terminal_reward_delta(
+                breakdown,
+                reward_emitted_so_far=self.state.reward_emitted_so_far,
+            )
             done = True
         else:
             # Non-terminal step — only the step penalty
             step_reward = compute_step_reward(
                 self.state,
                 repeated_action=repeated_action,
+                shaping_reward=shaping_reward,
             )
             done = False
             breakdown = None
@@ -248,6 +267,7 @@ class BugInvestigationEnv:
         """Route a validated action to the appropriate repository method."""
 
         if action.type == LIST_FILES:
+            self.state.record_files_listed()
             files = self.repo.list_files()
             return "Repository files:\n" + "\n".join(f"  {f}" for f in files)
 
@@ -258,8 +278,11 @@ class BugInvestigationEnv:
             return content
 
         elif action.type == SEARCH:
-            self.state.keywords_searched.append(action.keyword)
             ok, content = self.repo.search(action.keyword)
+            self.state.record_search(
+                action.keyword,
+                useful=self._is_useful_search(action.keyword, content) if ok else False,
+            )
             return content
 
         elif action.type == RUN_TESTS:
@@ -311,6 +334,7 @@ class BugInvestigationEnv:
     def _info(self, breakdown=None) -> Info:
         solved = False
         info: Info = {
+            "files_listed_count":      self.state.files_listed_count,
             "files_opened":            list(self.state.files_opened),
             "functions_inspected":     list(self.state.functions_inspected),
             "keywords_searched":       list(self.state.keywords_searched),
@@ -319,6 +343,7 @@ class BugInvestigationEnv:
             "parse_error_count":       self.state.parse_error_count,
             "repeated_action_count":   self.state.repeated_action_count,
             "correct_file_opened":     self.state.correct_file_opened,
+            "correct_function_inspected": self.state.correct_function_inspected,
             "correct_function_found":  self.state.correct_function_inspected,
             "submitted":               self.state.submitted,
             "elapsed_seconds":         self.state.elapsed_seconds,
@@ -329,17 +354,12 @@ class BugInvestigationEnv:
             "last_transition":         self.state.trajectory[-1] if self.state.trajectory else None,
             "task_id":                 self.task.task_id,
             "sandbox_mode":            self.repo.sandbox_mode,
+            "reward_emitted_so_far":   self.state.reward_emitted_so_far,
             "solved":                  solved,
         }
         if breakdown is not None:
             reward_breakdown = breakdown.as_dict()
-            solved = (
-                self.state.submitted
-                and reward_breakdown["correctness"] >= 0.5
-                and reward_breakdown["wrong_penalty"] == 0.0
-                and reward_breakdown["evidence_penalty"] == 0.0
-                and reward_breakdown["contradiction_penalty"] == 0.0
-            )
+            solved = is_solved_episode(self.state, breakdown)
             info["reward_breakdown"] = reward_breakdown
             info["solved"] = solved
         return info
@@ -363,6 +383,29 @@ class BugInvestigationEnv:
         if len(one_line) <= limit:
             return one_line
         return one_line[:limit] + "..."
+
+    def _is_useful_search(self, keyword: str, content: str) -> bool:
+        keyword_lower = keyword.lower()
+        content_lower = content.lower()
+        useful_signals = {
+            self.state.bug_file.lower(),
+            os.path.basename(self.state.bug_file).lower(),
+            os.path.splitext(os.path.basename(self.state.bug_file))[0].lower(),
+            self.state.bug_function.lower(),
+        }
+        useful_signals.update(kw.lower() for kw in self.state.mechanism_keywords)
+        for entry in self.state.evidence_function_entries:
+            file_part, _, function_part = entry.partition("::")
+            useful_signals.add(file_part.lower())
+            useful_signals.add(os.path.basename(file_part).lower())
+            useful_signals.add(os.path.splitext(os.path.basename(file_part))[0].lower())
+            if function_part:
+                useful_signals.add(function_part.lower())
+
+        return any(
+            signal and (signal in keyword_lower or signal in content_lower)
+            for signal in useful_signals
+        )
 
     # ── Convenience ─────────────────────────────────────────────────────
 

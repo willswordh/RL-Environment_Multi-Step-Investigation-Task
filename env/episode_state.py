@@ -19,14 +19,18 @@ class EpisodeState:
     max_steps: int = 15
 
     # ── exploration tracking ─────────────────────────────────────────
+    files_listed_count: int = 0
     files_opened: Set[str] = field(default_factory=set)
     functions_inspected: Set[str] = field(default_factory=set)
     keywords_searched: List[str] = field(default_factory=list)
+    useful_search_observed: bool = False
     tests_run: bool = False
     invalid_action_count: int = 0
     repeated_action_count: int = 0
     parse_error_count: int = 0
     trajectory: List[Dict[str, Any]] = field(default_factory=list)
+    awarded_shaping_events: Set[str] = field(default_factory=set)
+    shaping_reward_total: float = 0.0
 
     # ── milestone flags (for partial rewards) ────────────────────────
     correct_file_opened: bool = False
@@ -54,6 +58,7 @@ class EpisodeState:
     task_id: str = ""
     bug_file: str = ""
     bug_function: str = ""
+    accessible_files: List[str] = field(default_factory=list)
     mechanism_keywords: List[str] = field(default_factory=list)
     fix_keywords: List[str] = field(default_factory=list)
     evidence_function_entries: List[str] = field(default_factory=list)
@@ -66,6 +71,7 @@ class EpisodeState:
             task_id=task.task_id,
             bug_file=task.bug_file,
             bug_function=task.bug_function,
+            accessible_files=list(task.accessible_files),
             mechanism_keywords=list(task.mechanism_keywords),
             fix_keywords=list(task.fix_keywords),
             evidence_function_entries=list(task.evidence_functions),
@@ -79,8 +85,20 @@ class EpisodeState:
     def budget_exhausted(self) -> bool:
         return self.step_count >= self.max_steps
 
+    @property
+    def reward_emitted_so_far(self) -> float:
+        return sum(float(item.get("reward", 0.0)) for item in self.trajectory)
+
     def refresh_elapsed(self) -> None:
         self.elapsed_seconds = max(0.0, time.monotonic() - self.start_time)
+
+    def record_files_listed(self) -> None:
+        self.files_listed_count += 1
+
+    def record_search(self, keyword: str, *, useful: bool = False) -> None:
+        self.keywords_searched.append(keyword)
+        if useful:
+            self.useful_search_observed = True
 
     def record_file_opened(self, filename: str) -> None:
         self.files_opened.add(filename)
@@ -109,6 +127,26 @@ class EpisodeState:
             self.repeated_action_count += 1
             return True
         return False
+
+    def mark_shaping_event_once(
+        self,
+        event_name: str,
+        *,
+        reward_value: float,
+        shaping_max_total: float,
+    ) -> float:
+        """Award a shaping event at most once, respecting the global cap."""
+        if reward_value <= 0.0 or event_name in self.awarded_shaping_events:
+            return 0.0
+
+        remaining = max(0.0, shaping_max_total - self.shaping_reward_total)
+        if remaining <= 0.0:
+            return 0.0
+
+        awarded = min(reward_value, remaining)
+        self.awarded_shaping_events.add(event_name)
+        self.shaping_reward_total += awarded
+        return awarded
 
     def record_transition(
         self,

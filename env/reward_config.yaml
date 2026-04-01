@@ -1,0 +1,33 @@
+terminal_rewards:
+  correct_root_cause: 1.0
+  correct_mechanism: 0.25
+  correct_fix: 0.20
+  correct_file: 0.10
+  correct_function: 0.10
+
+step_penalties:
+  per_step: -0.01
+  invalid_action: -0.05
+  repeated_action: -0.02
+
+shaping_rewards:
+  first_test_run: 0.05
+  correct_file_opened: 0.05
+  correct_function_inspected: 0.05
+  useful_search: 0.03
+
+anti_hacking_penalties:
+  wrong_submission: -0.40
+  insufficient_evidence: -0.20
+  contradiction: -0.15
+  budget_exhausted: -0.10
+  max_invalid_reached: -0.10
+  timeout: -0.10
+
+thresholds:
+  reasonable_answer: 0.50
+  solved_correctness: 0.80
+  evidence_required_for_full_credit: 0.60
+
+caps:
+  shaping_max_total: 0.20

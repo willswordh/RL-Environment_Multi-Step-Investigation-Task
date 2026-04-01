@@ -13,8 +13,9 @@ from env.tools.repository import Repository
 def test_default_task_loads_from_task_pack():
     task = load_task()
     assert task.task_id == "discount-rounding"
-    assert task.benchmark_test_target.endswith("test_vip_discount_rounding")
+    assert task.benchmark_test_target == "tests/test_task_order_processor.py"
     assert os.path.exists(task.instruction_path)
+    assert "tests/test_task_order_processor.py" not in task.accessible_files
 
 
 def test_parse_action_accepts_function_name_alias():
@@ -70,12 +71,25 @@ def test_repository_run_tests_uses_compatible_pytest_flags(monkeypatch):
     def fake_run(cmd, **kwargs):
         captured["cmd"] = cmd
         captured["cwd"] = kwargs.get("cwd")
+        captured["timeout"] = kwargs.get("timeout")
+        captured["env"] = kwargs.get("env", {})
         captured["repo_exists"] = os.path.exists(
             os.path.join(captured["cwd"], "repo", "order_processor.py")
         )
         captured["tests_exists"] = os.path.exists(
             os.path.join(captured["cwd"], "tests", "test_task_order_processor.py")
         )
+        captured["repo_pycache_exists"] = os.path.exists(
+            os.path.join(captured["cwd"], "repo", "__pycache__")
+        )
+        captured["tests_pycache_exists"] = os.path.exists(
+            os.path.join(captured["cwd"], "tests", "__pycache__")
+        )
+        captured["pyc_files"] = []
+        for root, _, files in os.walk(captured["cwd"]):
+            for name in files:
+                if name.endswith(".pyc"):
+                    captured["pyc_files"].append(os.path.join(root, name))
         return FakeResult()
 
     monkeypatch.setattr(subprocess, "run", fake_run)
@@ -87,9 +101,32 @@ def test_repository_run_tests_uses_compatible_pytest_flags(monkeypatch):
     assert captured["cwd"] != repo.task.task_root
     assert captured["repo_exists"] is True
     assert captured["tests_exists"] is True
+    assert captured["repo_pycache_exists"] is False
+    assert captured["tests_pycache_exists"] is False
+    assert captured["pyc_files"] == []
+    assert captured["cmd"][1] == "-B"
+    assert captured["timeout"] == repo.task.timeout_seconds
+    assert captured["env"]["PYTEST_DISABLE_PLUGIN_AUTOLOAD"] == "1"
+    assert captured["env"]["PYTHONDONTWRITEBYTECODE"] == "1"
+    assert captured["env"]["PYTHONNOUSERSITE"] == "1"
     assert "--no-header" not in captured["cmd"]
-    assert "tests/" not in captured["cmd"]
-    assert (
-        "tests/test_task_order_processor.py::TestDiscountRounding::test_vip_discount_rounding"
-        in captured["cmd"]
-    )
+    assert "tests/test_task_order_processor.py" in captured["cmd"]
+
+
+def test_repository_run_tests_timeout_returns_failure_message(monkeypatch):
+    def fake_run(*args, **kwargs):
+        raise subprocess.TimeoutExpired(
+            cmd=kwargs.get("args", args[0]),
+            timeout=kwargs["timeout"],
+            output="collected 1 item\n",
+            stderr="still running",
+        )
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
+    repo = Repository(task=load_task())
+    passed, output = repo.run_tests()
+
+    assert passed is False
+    assert "timed out" in output.lower()
+    assert repo.task.benchmark_test_target in output
+    assert "Partial output" in output

@@ -147,20 +147,39 @@ class Repository:
         """
         with tempfile.TemporaryDirectory(prefix="bug-env-") as sandbox_root:
             self._populate_sandbox(sandbox_root)
-            result = subprocess.run(
-                [
-                    sys.executable,
-                    "-m",
-                    "pytest",
-                    self.task.benchmark_test_target,
-                    "-v",
-                    "--tb=short",
-                ],
-                cwd=sandbox_root,
-                capture_output=True,
-                text=True,
-                timeout=30,
-            )
+            timeout_seconds = max(1.0, float(self.task.timeout_seconds))
+            env = os.environ.copy()
+            env["PYTEST_DISABLE_PLUGIN_AUTOLOAD"] = "1"
+            env["PYTHONDONTWRITEBYTECODE"] = "1"
+            env["PYTHONNOUSERSITE"] = "1"
+            try:
+                result = subprocess.run(
+                    [
+                        sys.executable,
+                        "-B",
+                        "-m",
+                        "pytest",
+                        self.task.benchmark_test_target,
+                        "-v",
+                        "--tb=short",
+                    ],
+                    cwd=sandbox_root,
+                    capture_output=True,
+                    text=True,
+                    timeout=timeout_seconds,
+                    env=env,
+                )
+            except subprocess.TimeoutExpired as exc:
+                stdout = exc.stdout or ""
+                stderr = exc.stderr or ""
+                partial_output = (stdout + stderr).strip()
+                message = (
+                    "Pytest timed out after "
+                    f"{timeout_seconds:.1f}s while running {self.task.benchmark_test_target}."
+                )
+                if partial_output:
+                    message += "\n\nPartial output:\n" + partial_output
+                return False, message
             output = result.stdout + result.stderr
             passed = result.returncode == 0
             return passed, output.strip()
@@ -168,8 +187,14 @@ class Repository:
     def _populate_sandbox(self, sandbox_root: str) -> None:
         repo_dst = os.path.join(sandbox_root, self.task.repo_subdir)
         tests_dst = os.path.join(sandbox_root, self.task.tests_subdir)
-        shutil.copytree(self.task.repo_dir, repo_dst)
-        shutil.copytree(self.task.tests_dir, tests_dst)
+        ignore = shutil.ignore_patterns(
+            "__pycache__",
+            "*.pyc",
+            ".pytest_cache",
+            ".mypy_cache",
+        )
+        shutil.copytree(self.task.repo_dir, repo_dst, ignore=ignore)
+        shutil.copytree(self.task.tests_dir, tests_dst, ignore=ignore)
 
 
 def _infer_block_end(lines: List[str], start: int) -> int:

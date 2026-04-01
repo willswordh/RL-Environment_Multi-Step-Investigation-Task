@@ -198,6 +198,8 @@ def action_help() -> str:
         "   \"bug_file\": \"<path>\", \"bug_function\": \"<name>\",\n"
         "   \"mechanism\": \"<why>\", \"proposed_fix\": \"<summary>\"}\n"
         "      → Submits the root cause and ends the episode.\n"
+        "        Structured fields are optional metadata; positive credit comes from\n"
+        "        the free-text root cause and fix.\n"
     )
 
 

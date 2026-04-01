@@ -16,12 +16,11 @@ class TestDiscountRounding:
     """Tests that verify correct rounding of discounted order totals."""
 
     def test_premium_discount_rounding(self):
-        """A premium member's 10% discount should round half-up to the nearest cent.
+        """Premium discount case that validates rounded cents.
 
         Order:  1 x $24.75  →  gross = $24.75
         10% discount:  $24.75 * 0.90 = $22.275
-        Expected (round half-up):  $22.28
-        Actual with banker's rounding:  $22.28  (this case rounds up, passes)
+        Expected final total: $22.28
         """
         order = Order(
             order_id="ORD-001",
@@ -32,11 +31,11 @@ class TestDiscountRounding:
         assert result["final_total"] == 22.28
 
     def test_premium_discount_rounding_half_up(self):
-        """Critical rounding test: 10% discount on $24.75 x 1 item.
+        """Premium discount case that should preserve an exact-cent result.
 
         Order:  3 x $7.50  →  gross = $22.50
         10% discount:  $22.50 * 0.90 = $20.25
-        Expected (round half-up):  $20.25  (exact, no rounding needed)
+        Expected final total: $20.25
         """
         order = Order(
             order_id="ORD-002",
@@ -47,7 +46,7 @@ class TestDiscountRounding:
         assert result["final_total"] == 20.25
 
     def test_vip_discount_rounding(self):
-        """VIP discounts should round to the nearest cent with financial rounding."""
+        """VIP discount case with a cent-level boundary condition."""
         order = Order(
             order_id="ORD-003",
             customer="Carol",

@@ -10,12 +10,12 @@ max_invalid_actions = 5
 timeout_seconds = 120.0
 repo_subdir = "repo"
 tests_subdir = "tests"
-accessible_files = ["repo/models.py", "repo/config.py", "repo/math_utils.py", "repo/discount.py", "repo/order_processor.py", "tests/test_task_order_processor.py"]
-benchmark_test_target = "tests/test_task_order_processor.py::TestDiscountRounding::test_vip_discount_rounding"
+accessible_files = ["repo/models.py", "repo/config.py", "repo/math_utils.py", "repo/discount.py", "repo/order_processor.py"]
+benchmark_test_target = "tests/test_task_order_processor.py"
 
 [ground_truth]
 bug_file = "repo/math_utils.py"
 bug_function = "round_currency"
-mechanism_keywords = ["banker", "half to even", "half-to-even", "round_half_up", "round half up", "decimal", "round_half_even", "ieee 754"]
+mechanism_keywords = ["banker", "half to even", "half-to-even", "round_half_even", "ieee 754"]
 fix_keywords = ["decimal", "round_half_up", "round half up", "quantize"]
 evidence_functions = ["repo/discount.py::apply_discount"]
