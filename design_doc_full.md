@@ -20,6 +20,19 @@ The repository also contains a top-level `tests/` directory, but those tests are
 
 Reward policy values are separated from reward execution. Numerical weights and thresholds live in `env/reward_config.yaml`, while `env/reward.py` keeps the custom Python logic for semantic matching, evidence validation, solved gating, and anti-double-counting.
 
+### 1.1 Current Repository State
+
+Relative to the earliest single-task prototype, the current repo version has a few important structural changes:
+
+- task content now lives under `tasks/<task_id>/` rather than being hardcoded in the runtime
+- reward policy values live in `env/reward_config.yaml`, while reward execution stays in Python
+- `run_tests` executes the task-side verifier in a fresh temporary workspace copied from the task pack
+- agent-visible files exclude verifier tests, so the main signal comes from investigation rather than reading explanatory assertions
+- shaping rewards are small, sparse, one-shot, and capped
+- solved episodes require strong investigation evidence, the required call path, a sufficiently correct root cause, and a non-negated fix
+
+These changes make the environment more reusable, harder to shortcut, and easier to evaluate consistently than the original hardcoded version.
+
 ## 2. Environment Design
 
 ### 2.1 State Representation

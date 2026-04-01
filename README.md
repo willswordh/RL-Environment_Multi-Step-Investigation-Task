@@ -1,17 +1,6 @@
 # RL Environment — Multi-Step Bug Investigation
 
-A task-pack-based reinforcement learning environment for repository investigation tasks.
-
-## What Changed
-
-- Task content now lives under `tasks/<task_id>/`.
-- The environment loads task metadata from `task.toml` instead of hardcoding one bug across the codebase.
-- Reward policy values now live in `env/reward_config.yaml`, while reward execution stays in Python.
-- `run_tests` now executes the full task-side verifier in a fresh temporary workspace copied from the task pack, with bytecode writes and third-party pytest plugin autoload disabled.
-- Agent-visible files now exclude verifier tests, so the main reward signal comes from investigation rather than reading explanatory assertions.
-- Reward shaping is now small, sparse, one-shot, and capped; terminal correctness remains the dominant signal.
-- Solved episodes now require strong investigation evidence, the required call path, a sufficiently correct root cause, and a non-negated fix.
-- The top-level README no longer publishes the benchmark answer.
+A task-pack-based reinforcement learning environment for multi-step repository investigation. An agent receives a bug report, explores a partially observable codebase through a small action set, and submits a root-cause analysis and proposed fix. The environment is designed for take-home scale RL environment design: it emphasizes sequential investigation, sparse evidence-based reward shaping, and a hidden verifier executed through `run_tests()`.
 
 ## Quick Start
 
@@ -72,3 +61,4 @@ Every `run_tests` action copies the task pack's `repo/` and `tests/` directories
 ## Notes
 
 - `design_doc.md`, `docs/PLAN.md`, and `docs/PLAN2.md` are author-facing docs; the agent-facing prompt is `tasks/<task_id>/instruction.md`.
+- Detailed implementation notes and reward-design rationale live in `design_doc.md` and `design_doc_full.md`.
