@@ -153,7 +153,7 @@ RL-env/
 │   ├── run_task.py
 │   └── run_eval.py
 ├── tests/
-├── design_doc.md
+├── design_doc_short.md
 └── ...
 ```
 

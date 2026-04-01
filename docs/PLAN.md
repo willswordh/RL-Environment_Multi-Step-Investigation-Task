@@ -418,7 +418,7 @@ RL-env/
 │   └── test_order_processor.py     # Failing test case
 │
 ├── example_run.py                   # Demo: manually scripted trajectory
-└── design_doc.md                    # Deliverable 2: Environment Design Document
+└── design_doc_short.md              # Deliverable 2: Environment Design Document
 ```
 
 ---
@@ -442,7 +442,7 @@ RL-env/
 
 ### Phase 3 — Demo & Documentation
 - [ ] Write `example_run.py` — scripted 5-step trajectory demonstrating the env
-- [ ] Write `design_doc.md` — clean version of Section 8 above (Deliverable 2)
+- [ ] Write `design_doc_short.md` — clean version of Section 8 above (Deliverable 2)
 
 ### Phase 4 — Quality & Polish
 - [ ] Add type annotations throughout

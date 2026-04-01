@@ -1,6 +1,19 @@
 # RL Environment — Multi-Step Bug Investigation
 
-A task-pack-based reinforcement learning environment for multi-step repository investigation. An agent receives a bug report, explores a partially observable codebase through a small action set, and submits a root-cause analysis and proposed fix. The environment is designed for take-home scale RL environment design: it emphasizes sequential investigation, sparse evidence-based reward shaping, and a hidden verifier executed through `run_tests()`.
+A task-pack-based reinforcement learning environment for multi-step repository investigation. An agent receives a bug report, explores a partially observable codebase through a small action set, and submits a root-cause analysis and proposed fix.
+
+This project is built for the RL environment design take-home in `task.md`. It focuses on the parts that matter most for that assignment:
+
+- partial observability over a small codebase rather than full upfront access
+- a compact investigation-oriented action space with `reset()` / `step()`
+- reward shaping that values grounded investigation over shortcut guessing
+- a hidden verifier executed through `run_tests()` instead of direct test-file access
+- author-side tests and design docs that explain the environment decisions
+
+## Design Docs
+
+- [Short Design Doc](design_doc_short.md)
+- [Full Design Doc](design_doc_full.md)
 
 ## Quick Start
 
@@ -26,7 +39,8 @@ RL-env/
 │       ├── repo/                    # Repository snapshot for the task
 │       └── tests/                   # Task verifier inputs
 ├── tests/                           # Environment/unit tests
-├── design_doc.md                    # Design write-up
+├── design_doc_short.md              # Short design write-up
+├── design_doc_full.md               # Full design write-up
 ├── pytest.ini                       # Pytest config for author-side tests
 └── pyproject.toml                   # Project metadata
 ```
@@ -60,5 +74,4 @@ Every `run_tests` action copies the task pack's `repo/` and `tests/` directories
 
 ## Notes
 
-- `design_doc.md`, `docs/PLAN.md`, and `docs/PLAN2.md` are author-facing docs; the agent-facing prompt is `tasks/<task_id>/instruction.md`.
-- Detailed implementation notes and reward-design rationale live in `design_doc.md` and `design_doc_full.md`.
+- `design_doc_short.md`, `design_doc_full.md`, `docs/PLAN.md`, and `docs/PLAN2.md` are author-facing docs; the agent-facing prompt is `tasks/<task_id>/instruction.md`.
